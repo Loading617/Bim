@@ -1,110 +1,43 @@
-#include <wx/wx.h>
-#include <wx/mediactrl.h>
-#include <wx/filedlg.h>
+#include <iostream>
+#include <ffmpeg/avformat.h>
+#include <ffmpeg/avcodec.h>
+#include <ffmpeg/swresample.h>
 
-class MediaPlayerApp : public wxApp {
-public:
-    virtual bool OnInit();
-};
+int main() {
+    // Initialize FFmpeg
+    av_register_all();
 
-class MediaPlayerFrame : public wxFrame {
-public:
-    MediaPlayerFrame(const wxString& title);
-
-private:
-    void OnOpenFile(wxCommandEvent& event);
-    void OnPlay(wxCommandEvent& event);
-    void OnPause(wxCommandEvent& event);
-    void OnStop(wxCommandEvent& event);
-
-    wxMediaCtrl* mediaCtrl;
-    wxButton* playButton;
-    wxButton* pauseButton;
-    wxButton* stopButton;
-};
-
-enum {
-    ID_Open = wxID_HIGHEST + 1,
-    ID_Play,
-    ID_Pause,
-    ID_Stop
-};
-
-wxIMPLEMENT_APP(MediaPlayerApp);
-
-bool MediaPlayerApp::OnInit() {
-    MediaPlayerFrame* frame = new MediaPlayerFrame("wxWidgets Media Player");
-    frame->Show(true);
-    return true;
-}
-
-MediaPlayerFrame::MediaPlayerFrame(const wxString& title)
-    : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(800, 600)) {
-    // Create media control
-    mediaCtrl = new wxMediaCtrl(this, wxID_ANY);
-
-    // Create buttons
-    wxButton* openButton = new wxButton(this, ID_Open, "Open File");
-    playButton = new wxButton(this, ID_Play, "Play");
-    pauseButton = new wxButton(this, ID_Pause, "Pause");
-    stopButton = new wxButton(this, ID_Stop, "Stop");
-
-    // Arrange buttons in a sizer
-    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    buttonSizer->Add(openButton, 0, wxALL, 5);
-    buttonSizer->Add(playButton, 0, wxALL, 5);
-    buttonSizer->Add(pauseButton, 0, wxALL, 5);
-    buttonSizer->Add(stopButton, 0, wxALL, 5);
-
-    // Arrange media control and buttons in a vertical sizer
-    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-    mainSizer->Add(mediaCtrl, 1, wxEXPAND | wxALL, 5);
-    mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER);
-
-    SetSizer(mainSizer);
-
-    // Bind events
-    Bind(wxEVT_BUTTON, &MediaPlayerFrame::OnOpenFile, this, ID_Open);
-    Bind(wxEVT_BUTTON, &MediaPlayerFrame::OnPlay, this, ID_Play);
-    Bind(wxEVT_BUTTON, &MediaPlayerFrame::OnPause, this, ID_Pause);
-    Bind(wxEVT_BUTTON, &MediaPlayerFrame::OnStop, this, ID_Stop);
-}
-
-void MediaPlayerFrame::OnOpenFile(wxCommandEvent& event) {
-    wxFileDialog openFileDialog(this, "Open Media File", "", "",
-        "Media Files|*.mp3;*.mp4;*.avi;*.mkv;*.wav;*.flac|All Files|*.*",
-        wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-
-    if (openFileDialog.ShowModal() == wxID_CANCEL) {
-        return; // User cancelled
+    // Open the media file
+    AVFormatContext* formatContext = nullptr;
+    if (avformat_open_input(&formatContext, "sample.mp3", nullptr, nullptr) != 0) {
+        std::cerr << "Failed to open file." << std::endl;
+        return -1;
     }
 
-    wxString filePath = openFileDialog.GetPath();
-    if (!mediaCtrl->Load(filePath)) {
-        wxMessageBox("Unable to load media file.", "Error", wxICON_ERROR);
+    // Find the audio stream
+    int audioStreamIndex = -1;
+    for (unsigned int i = 0; i < formatContext->nb_streams; i++) {
+        if (formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            audioStreamIndex = i;
+            break;
+        }
     }
+
+    if (audioStreamIndex == -1) {
+        std::cerr << "Audio stream not found." << std::endl;
+        return -1;
+    }
+
+    // Decode and process audio here...
+
+    // Clean up
+    avformat_close_input(&formatContext);
+
+    return 0;
 }
 
-void MediaPlayerFrame::OnPlay(wxCommandEvent& event) {
-    if (mediaCtrl->Play()) {
-        playButton->Disable();
-        pauseButton->Enable();
-    } else {
-        wxMessageBox("Unable to play media file.", "Error", wxICON_ERROR);
-    }
-}
-
-void MediaPlayerFrame::OnPause(wxCommandEvent& event) {
-    if (mediaCtrl->Pause()) {
-        playButton->Enable();
-        pauseButton->Disable();
-    } else {
-        wxMessageBox("Unable to pause media file.", "Error", wxICON_ERROR);
-    }
-}
-
-void MediaPlayerFrame::OnStop(wxCommandEvent& event) {
-    mediaCtrl->Stop();
-    playButton->Enable();
-    pauseButton->Disable();
-}
+libvlc_instance_t* instance = libvlc_new(0, nullptr);
+libvlc_media_player_t* player = libvlc_media_player_new(instance);
+libvlc_media_t* media = libvlc_media_new_path(instance, "media_file.mp4");
+libvlc_media_player_set_media(player, media);
+libvlc_media_player_play(player);
